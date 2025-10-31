@@ -28,6 +28,7 @@
       max-height: 180px;
       object-fit: cover;
       display: block;
+      margin-left: -20px;
     }
 
     h1 {
@@ -82,22 +83,20 @@
     <img src="./img/IdraulicApp_header.png" alt="Intestazione IdraulicApp">
   </header>
 
-  <!-- Contenitore del calendario -->
   <div id="calendar"></div>
 
-  <!-- Pulsanti delle sezioni -->
   <div class="sections">
-    <div class="section" onclick="location.href='ditta.html'">
+    <div class="section" onclick="location.href='Ditta.html'">
       <img src="./img/Ditta_header.png" alt="Ditta">
       <p>Ditta</p>
     </div>
 
-    <div class="section" onclick="location.href='preventivi.html'">
+    <div class="section" onclick="location.href='Preventivi.html'">
       <img src="./img/Preventivi_header.png" alt="Preventivi">
       <p>Preventivi</p>
     </div>
 
-    <div class="section" onclick="location.href='documenti.html'">
+    <div class="section" onclick="location.href='Documenti.html'">
       <img src="./img/Documenti_header.png" alt="Documenti">
       <p>Documenti</p>
     </div>
@@ -109,18 +108,24 @@
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       const calendarEl = document.getElementById('calendar');
-
       const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         headerToolbar: {
           left: 'prev,next today',
           center: 'title',
-          right: 'dayGridMonth,timeGridWeek,timeGridDay'
+          right: 'dayGridYear,dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        views: {
+          dayGridYear: {
+            type: 'dayGrid',
+            duration: { years: 1 },
+            buttonText: 'Anno'
+          }
         },
         editable: true,
         selectable: true,
         select: function(info) {
-          const title = prompt("Inserisci il titolo dell'appuntamento:");
+          const title = prompt('Inserisci il titolo dell\'appuntamento:');
           if (title) {
             calendar.addEvent({
               title: title,
@@ -135,7 +140,6 @@
           { title: 'Appuntamento di prova', start: new Date().toISOString().slice(0,10) }
         ]
       });
-
       calendar.render();
     });
   </script>
