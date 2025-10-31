@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trova Cliente - IdraulicApp</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background-color: #f3f6f9;
+      color: #333;
+      text-align: center;
+    }
+
+    header {
+      background-color: #fff;
+      padding: 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    header img {
+      width: 100%;
+      max-height: 180px;
+      object-fit: cover;
+      display: block;
+    }
+
+    h1 {
+      margin: 20px 0;
+      color: #0077cc;
+    }
+
+    .container {
+      width: 95%;
+      max-width: 1100px;
+      margin: 20px auto;
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      overflow-x: auto;
+    }
+
+    input[type="text"] {
+      width: 300px;
+      padding: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    th {
+      background-color: #0077cc;
+      color: white;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    tr:hover {
+      background-color: #eef6ff;
+    }
+
+    .back-btn, .reload-btn {
+      display: inline-block;
+      margin: 20px 10px;
+      background-color: #0077cc;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background-color 0.2s;
+    }
+
+    .back-btn:hover, .reload-btn:hover {
+      background-color: #005fa3;
+    }
+
+    .no-data {
+      color: #999;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="./img/cliente_search.png" alt="Trova Cliente">
+  </header>
+
+  <h1>Elenco Clienti</h1>
+
+  <div class="container">
+    <input type="text" id="search" placeholder="Cerca cliente..." onkeyup="filtraClienti()">
+
+    <div id="table-container">
+      <p class="no-data">Caricamento in corso...</p>
+    </div>
+  </div>
+
+  <a href="ditta.html" class="back-btn">← Torna a Ditta</a>
+  <a href="#" class="reload-btn" onclick="caricaClienti()">🔄 Aggiorna</a>
+
+  <script>
+    const CSV_URL = "https://tuonome.github.io/IdraulicApp/Tabella_clienti.csv";
+
+    async function caricaClienti() {
+      const container = document.getElementById("table-container");
+      container.innerHTML = "<p class='no-data'>Caricamento in corso...</p>";
+
+      try {
+        const response = await fetch(CSV_URL);
+        if (!response.ok) throw new Error("Errore nel caricamento del file CSV");
+        const text = await response.text();
+
+        const rows = text.trim().split("\n").map(r => r.split(","));
+        const headers = rows.shift();
+
+        // Costruisci tabella HTML
+        let html = "<table><thead><tr>";
+        headers.forEach(h => html += `<th>${h}</th>`);
+        html += "</tr></thead><tbody>";
+
+        rows.forEach(row => {
+          html += "<tr>";
+          row.forEach(cell => html += `<td>${cell}</td>`);
+          html += "</tr>";
+        });
+        html += "</tbody></table>";
+
+        container.innerHTML = html;
+      } catch (error) {
+        container.innerHTML = `<p class='no-data'>Errore: ${error.message}</p>`;
+      }
+    }
+
+    function filtraClienti() {
+      const input = document.getElementById("search").value.toLowerCase();
+      const righe = document.querySelectorAll("tbody tr");
+      righe.forEach(riga => {
+        const testo = riga.innerText.toLowerCase();
+        riga.style.display = testo.includes(input) ? "" : "none";
+      });
+    }
+
+    caricaClienti();
+  </script>
+
+</body>
+</html>

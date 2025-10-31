@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ditta - IdraulicApp</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background-color: #f3f6f9;
+      color: #333;
+      text-align: center;
+    }
+
+    header {
+      background-color: #fff;
+      padding: 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    header img {
+      width: 100%;
+      max-height: 180px;
+      object-fit: cover;
+      display: block;
+    }
+
+    h1 {
+      margin: 20px 0;
+      color: #0077cc;
+    }
+
+    .container {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 40px;
+      margin: 50px auto;
+      max-width: 1000px;
+    }
+
+    .card {
+      background-color: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      width: 200px;
+      height: 200px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: transform 0.2s;
+      cursor: pointer;
+    }
+
+    .card:hover {
+      transform: scale(1.05);
+    }
+
+    .card img {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+    }
+
+    .card p {
+      margin-top: 10px;
+      font-weight: 600;
+      color: #0077cc;
+    }
+
+    .back-btn {
+      display: inline-block;
+      margin-top: 20px;
+      background-color: #0077cc;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background-color 0.2s;
+    }
+
+    .back-btn:hover {
+      background-color: #005fa3;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="./img/Ditta_header.png" alt="Ditta">
+  </header>
+
+  <h1>Gestione Ditta</h1>
+
+  <div class="container">
+    <div class="card" onclick="alert('Aggiungi Cliente: pagina in costruzione')">
+      <img src="./img/cliente_add.png" alt="Aggiungi Cliente">
+      <p>Aggiungi Cliente</p>
+    </div>
+
+    <div class="card" onclick="alert('Trova Cliente: pagina in costruzione')">
+      <img src="./img/cliente_search.png" alt="Trova Cliente">
+      <p>Trova Cliente</p>
+    </div>
+
+    <div class="card" onclick="alert('I miei Dati: pagina in costruzione')">
+      <img src="./img/miei_dati.png" alt="I miei Dati">
+      <p>I miei Dati</p>
+    </div>
+
+    <div class="card" onclick="alert('Camion: pagina in costruzione')">
+      <img src="./img/camion.png" alt="Camion">
+      <p>Camion</p>
+    </div>
+
+    <div class="card" onclick="alert('Magazzino: pagina in costruzione')">
+      <img src="./img/magazzino.png" alt="Magazzino">
+      <p>Magazzino</p>
+    </div>
+
+    <div class="card" onclick="alert('Computer: pagina in costruzione')">
+      <img src="./img/computer.png" alt="Computer">
+      <p>Computer</p>
+    </div>
+  </div>
+
+  <a href="index.html" class="back-btn">← Torna alla Home</a>
+
+</body>
+</html>
