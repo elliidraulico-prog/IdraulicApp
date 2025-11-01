@@ -21,7 +21,7 @@
     table {
       margin: 20px auto;
       border-collapse: collapse;
-      width: 95%;
+      width: 98%;
       background-color: #fff;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
       border-radius: 10px;
@@ -29,11 +29,15 @@
     }
     th, td {
       border: 1px solid #ddd;
-      padding: 8px;
+      padding: 6px;
+      font-size: 0.85em;
     }
     th {
       background-color: #0077cc;
       color: white;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
     tr:hover {
       background-color: #f1f1f1;
@@ -58,14 +62,16 @@
 
   <button class="btn" onclick="caricaClienti()">🔄 Aggiorna</button>
 
-  <table id="tabellaClienti">
-    <thead>
-      <tr id="intestazione"></tr>
-    </thead>
-    <tbody id="corpoTabella">
-      <tr><td colspan="10">Caricamento in corso...</td></tr>
-    </tbody>
-  </table>
+  <div style="overflow-x:auto;">
+    <table id="tabellaClienti">
+      <thead>
+        <tr id="intestazione"></tr>
+      </thead>
+      <tbody id="corpoTabella">
+        <tr><td colspan="33">Caricamento in corso...</td></tr>
+      </tbody>
+    </table>
+  </div>
 
   <button class="btn" onclick="location.href='Ditta.html'">⬅ Torna a Ditta</button>
 
@@ -86,38 +92,46 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    const ordineColonne = [
+      "Protocollo", "Data", "Impianto di", "Cognome", "Nome", "C.F.",
+      "Indirizzo", "Civico", "Cap", "Comune", "Provincia",
+      "Edificio ad uso:", "Sezione", "Foglio", "Mappale", "Sub",
+      "Nome", "Cognome", "Indirizzo", "Civico", "Cap",
+      "Comune", "Provincia",
+      "Allegato 1", "Allegato 2", "Allegato 3", "Allegato 4", "Allegato 5", "Allegato 6",
+      "kW tot", "Targa", "Cod.Curit"
+    ];
+
     async function caricaClienti() {
       const corpo = document.getElementById("corpoTabella");
       const intestazione = document.getElementById("intestazione");
-      corpo.innerHTML = "<tr><td colspan='10'>Caricamento...</td></tr>";
+      corpo.innerHTML = "<tr><td colspan='33'>Caricamento...</td></tr>";
 
       try {
         const querySnapshot = await getDocs(collection(db, "clienti"));
         let clienti = [];
-
         querySnapshot.forEach((doc) => {
           clienti.push(doc.data());
         });
 
         if (clienti.length === 0) {
-          corpo.innerHTML = "<tr><td colspan='10'>Nessun cliente trovato.</td></tr>";
+          corpo.innerHTML = "<tr><td colspan='33'>Nessun cliente trovato.</td></tr>";
           return;
         }
 
-        // Genera intestazione dinamica
-        const colonne = Object.keys(clienti[0]);
+        // Genera intestazione ordinata
         intestazione.innerHTML = "";
-        colonne.forEach(col => {
+        ordineColonne.forEach(col => {
           const th = document.createElement("th");
           th.textContent = col;
           intestazione.appendChild(th);
         });
 
-        // Genera righe
+        // Genera righe con le colonne ordinate
         corpo.innerHTML = "";
         clienti.forEach(cliente => {
           const tr = document.createElement("tr");
-          colonne.forEach(col => {
+          ordineColonne.forEach(col => {
             const td = document.createElement("td");
             td.textContent = cliente[col] ?? "";
             tr.appendChild(td);
@@ -127,11 +141,11 @@
 
       } catch (e) {
         console.error("Errore nel caricamento clienti:", e);
-        corpo.innerHTML = `<tr><td colspan='10'>Errore: ${e.message}</td></tr>`;
+        corpo.innerHTML = `<tr><td colspan='33'>Errore: ${e.message}</td></tr>`;
       }
     }
 
-    caricaClienti(); // carica all’avvio
+    caricaClienti();
   </script>
 </body>
 </html>
