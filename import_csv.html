@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Importa CSV → Firestore (IdraulicApp)</title>
+
+  <!-- Firebase compat libs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- PapaParse per leggere CSV in browser -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    body { font-family: "Segoe UI", Arial, sans-serif; background:#f3f6f9; color:#222; margin:0; padding:16px; }
+    .card { max-width:1000px; margin:18px auto; background:#fff; padding:18px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.06); }
+    h1 { color:#0077cc; text-align:center; margin:6px 0 14px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+    input[type=file] { padding:6px; }
+    button { background:#0077cc; color:#fff; border:0; padding:8px 12px; border-radius:6px; cursor:pointer; }
+    button.warn { background:#d9534f; }
+    button.alt { background:#28a745; }
+    label { font-weight:600; color:#333; }
+    .status { margin-top:12px; color:#333; }
+    pre { background:#f6f7fb; padding:10px; overflow:auto; border-radius:6px; font-size:13px; }
+    .small { font-size:13px; color:#666; }
+    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .checkbox { display:flex; align-items:center; gap:6px; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>Importa CSV in Firestore — IdraulicApp</h1>
+
+    <!-- Auth -->
+    <div id="authArea" class="row">
+      <input id="loginEmail" type="email" placeholder="Email" style="padding:8px;border-radius:6px;border:1px solid #ccc;" />
+      <input id="loginPassword" type="password" placeholder="Password" style="padding:8px;border-radius:6px;border:1px solid #ccc;" />
+      <button id="loginBtn">Accedi</button>
+      <button id="logoutBtn" style="display:none;">Esci</button>
+      <span id="userInfo" class="small"></span>
+    </div>
+
+    <hr />
+
+    <div id="mainArea" class="hide">
+      <div class="row">
+        <label for="csvFile">Seleziona file CSV (locale):</label>
+        <input id="csvFile" type="file" accept=".csv,text/csv" />
+      </div>
+
+      <div class="row controls">
+        <div class="checkbox"><input id="clearFirst" type="checkbox" /><label for="clearFirst" class="small">Sovrascrivi: cancella collezione <code>clienti</code> prima dell'import</label></div>
+        <button id="previewBtn">Mostra anteprima (prime 5 righe)</button>
+        <button id="importBtn" class="alt">📥 Avvia import</button>
+      </div>
+
+      <div class="status" id="status">Stato: in attesa file...</div>
+
+      <h3>Anteprima intestazioni</h3>
+      <pre id="previewHeaders">Nessun file caricato.</pre>
+
+      <h3>Prime righe (anteprima)</h3>
+      <pre id="previewRows">—</pre>
+
+      <h3>Log</h3>
+      <pre id="logArea" style="height:180px; overflow:auto;">Log operativo...</pre>
+    </div>
+
+    <div style="margin-top:12px;text-align:center;">
+      <a href="TrovaCliente.html" class="small">Vai a TrovaCliente (visualizza)</a> — <a href="Ditta.html" class="small">Torna a Ditta</a>
+    </div>
+  </div>
+
+<script>
+  // --- CONFIG FIREBASE (il tuo blocco)
+  const firebaseConfig = {
+    apiKey: "AIzaSyBVt9TgvYLYqAYSADT7JBA7pqeuMzh5d0w",
+    authDomain: "idraulicappweb.firebaseapp.com",
+    projectId: "idraulicappweb",
+    storageBucket: "idraulicappweb.firebasestorage.app",
+    messagingSenderId: "637601444127",
+    appId: "1:637601444127:web:10b6e5e695338b6a47002a"
+  };
+
+  // init
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  // UI
+  const loginBtn = document.getElementById('loginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const loginEmail = document.getElementById('loginEmail');
+  const loginPassword = document.getElementById('loginPassword');
+  const userInfo = document.getElementById('userInfo');
+  const mainArea = document.getElementById('mainArea');
+  const csvFileInput = document.getElementById('csvFile');
+  const previewBtn = document.getElementById('previewBtn');
+  const importBtn = document.getElementById('importBtn');
+  const previewHeaders = document.getElementById('previewHeaders');
+  const previewRows = document.getElementById('previewRows');
+  const logArea = document.getElementById('logArea');
+  const status = document.getElementById('status');
+  const clearFirst = document.getElementById('clearFirst');
+
+  // stato
+  let csvData = null;
+  let headers = null;
+
+  // auth handlers
+  loginBtn.addEventListener('click', async () => {
+    const email = loginEmail.value.trim();
+    const pw = loginPassword.value;
+    if (!email || !pw) { alert('Inserisci email e password'); return; }
+    try {
+      await auth.signInWithEmailAndPassword(email, pw);
+    } catch(e) {
+      alert('Errore login: ' + e.message);
+    }
+  });
+
+  logoutBtn.addEventListener('click', () => auth.signOut());
+
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      userInfo.textContent = 'Connesso come: ' + user.email;
+      loginBtn.style.display = 'none';
+      logoutBtn.style.display = 'inline-block';
+      loginEmail.style.display = 'none';
+      loginPassword.style.display = 'none';
+      mainArea.classList.remove('hide');
+      status.textContent = 'Autenticato. Seleziona CSV.';
+    } else {
+      userInfo.textContent = '';
+      loginBtn.style.display = 'inline-block';
+      logoutBtn.style.display = 'none';
+      loginEmail.style.display = 'inline-block';
+      loginPassword.style.display = 'inline-block';
+      mainArea.classList.add('hide');
+      status.textContent = 'Non autenticato.';
+    }
+  });
+
+  // file input parse
+  csvFileInput.addEventListener('change', (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    status.textContent = 'File selezionato: ' + file.name;
+    // parse small preview with PapaParse
+    Papa.parse(file, {
+      header: true,
+      preview: 6,
+      skipEmptyLines: true,
+      complete: (results) => {
+        headers = results.meta.fields || [];
+        csvData = null; // reset full data until user presses import
+        previewHeaders.textContent = JSON.stringify(headers, null, 2);
+        previewRows.textContent = results.data.slice(0,5).map(r => JSON.stringify(r)).join('\\n');
+        log('Anteprima caricata. Righe preview: ' + results.data.length);
+      },
+      error: (err) => {
+        log('Errore lettura CSV: ' + err.message);
+      }
+    });
+  });
+
+  previewBtn.addEventListener('click', () => {
+    const file = csvFileInput.files[0];
+    if (!file) { alert('Seleziona prima un file CSV'); return; }
+    Papa.parse(file, {
+      header: true,
+      preview: 20,
+      skipEmptyLines: true,
+      complete: (results) => {
+        headers = results.meta.fields || [];
+        csvData = results.data;
+        previewHeaders.textContent = JSON.stringify(headers, null, 2);
+        previewRows.textContent = results.data.slice(0,10).map(r => JSON.stringify(r)).join('\\n\\n');
+        log('Anteprima completa (fino a 20 righe). Totale righe lette in preview: ' + results.data.length);
+      },
+      error: (err) => {
+        log('Errore preview: ' + err.message);
+      }
+    });
+  });
+
+  // helper log
+  function log(msg) {
+    const t = new Date().toLocaleTimeString();
+    logArea.textContent = `[${t}] ${msg}\\n` + logArea.textContent;
+  }
+
+  // funzione per svuotare la collezione (se richiesto) - cancella in batch di 500
+  async function clearCollection(colName) {
+    log('Inizio cancellazione collezione: ' + colName);
+    const batchSize = 400;
+    let deleted = 0;
+    while (true) {
+      const snapshot = await db.collection(colName).limit(batchSize).get();
+      if (snapshot.empty) break;
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      deleted += snapshot.size;
+      log('Cancellati: ' + deleted);
+      if (snapshot.size < batchSize) break;
+    }
+    log('Cancellazione completata. Documenti rimossi: ' + deleted);
+  }
+
+  // import handler
+  importBtn.addEventListener('click', async () => {
+    const file = csvFileInput.files[0];
+    if (!file) { alert('Seleziona un file CSV prima'); return; }
+    status.textContent = 'Parsing completo CSV...';
+    log('Avvio parsing completo CSV (caricamento in memoria). Questo potrebbe impiegare qualche secondo...');
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: false,
+      complete: async (results) => {
+        const rows = results.data;
+        const fields = results.meta.fields || [];
+        log('CSV letto. Intestazioni: ' + JSON.stringify(fields));
+        log('Righe totali: ' + rows.length);
+        if (!rows.length) { alert('CSV vuoto o formato non corretto'); return; }
+
+        // conferma sovrascrittura se selezionato
+        if (clearFirst.checked) {
+          if (!confirm('Sei sicuro di voler CANCELLARE tutta la collezione "clienti" prima di importare?')) {
+            log('Operazione annullata dall\'utente (no cancellazione).');
+            return;
+          }
+          await clearCollection('clienti');
+        }
+
+        // upload in batch (Firestore batch max 500)
+        status.textContent = 'Import in corso...';
+        const batchLimit = 400;
+        let batch = db.batch();
+        let ops = 0;
+        let total = 0;
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          // keep header names as keys (trim)
+          const docData = {};
+          for (const k of Object.keys(row)) {
+            const cleanKey = k.trim(); // manteniamo come sono ma trim
+            docData[cleanKey] = (row[k] === undefined ? null : row[k]);
+          }
+          // crea doc auto-id
+          const docRef = db.collection('clienti').doc();
+          batch.set(docRef, docData);
+          ops++;
+          total++;
+
+          if (ops >= batchLimit) {
+            await batch.commit();
+            log('Commit batch: ' + total + ' documenti inviati.');
+            batch = db.batch();
+            ops = 0;
+          }
+        }
+        if (ops > 0) {
+          await batch.commit();
+          log('Commit finale: ' + total + ' documenti inviati.');
+        }
+        status.textContent = 'Import completato. Documenti importati: ' + total;
+        log('Import completato con successo. Totale: ' + total);
+        alert('Import completato: ' + total + ' documenti aggiunti alla collezione "clienti".');
+      },
+      error: (err) => {
+        log('Errore parsing: ' + err.message);
+        status.textContent = 'Errore parsing: ' + err.message;
+      }
+    });
+  });
+
+  // iniziale
+  status.textContent = 'In attesa autenticazione...';
+</script>
+
+</body>
+</html>
