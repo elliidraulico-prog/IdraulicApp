@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Trova Cliente - IdraulicApp</title>
+
+  <!-- Firebase compat libraries -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <style>
+    body { font-family: "Segoe UI", Arial, sans-serif; background:#f3f6f9; color:#333; margin:0; }
+    header { background:#fff; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
+    header img { width:100%; max-height:120px; object-fit:cover; display:block; }
+    .wrap { max-width:1100px; margin:20px auto; padding:0 16px; }
+    h1 { color:#0077cc; margin:12px 0; text-align:center; }
+    .auth, .controls { display:flex; gap:10px; align-items:center; justify-content:center; margin-bottom:12px; flex-wrap:wrap; }
+    .auth input { padding:8px; border-radius:6px; border:1px solid #ccc; }
+    button { padding:8px 12px; border-radius:6px; border:none; cursor:pointer; background:#0077cc; color:#fff; }
+    button.secondary { background:#28a745; }
+    button.danger { background:#d9534f; }
+    .table-container { background:#fff; padding:12px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.06); overflow:auto; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:8px; border-bottom:1px solid #eee; text-align:left; font-size:14px; }
+    th { background:#0077cc; color:#fff; position:sticky; top:0; }
+    td[contenteditable="true"] { background:#fffbe6; }
+    .actions button { margin-right:6px; }
+    .hide { display:none; }
+    .status { text-align:center; color:#666; margin:8px 0; }
+    .back { display:inline-block; margin:14px auto; background:#0077cc; color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="./img/Ditta_header.png" alt="IdraulicApp">
+  </header>
+
+  <div class="wrap">
+    <h1>Gestione Clienti (protetta)</h1>
+
+    <!-- Login UI -->
+    <div id="authUI" class="auth">
+      <input id="loginEmail" type="email" placeholder="Email" />
+      <input id="loginPassword" type="password" placeholder="Password" />
+      <button id="loginBtn">Accedi</button>
+      <button id="signupBtn" class="secondary">Crea account</button>
+      <div id="authMsg" style="color:#b00; margin-left:8px;"></div>
+    </div>
+
+    <!-- Authenticated controls -->
+    <div id="userUI" class="hide">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div class="controls">
+          <input id="search" placeholder="Cerca per nome, cognome, email..." style="padding:8px;border-radius:6px;border:1px solid #ccc;width:320px" />
+          <button id="refreshBtn">🔄 Aggiorna</button>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span id="userEmail" style="color:#333;"></span>
+          <button id="logoutBtn" class="">Esci</button>
+        </div>
+      </div>
+
+      <!-- Form di aggiunta rapida -->
+      <div style="margin:12px 0; display:grid; gap:8px; grid-template-columns: repeat(auto-fit,minmax(160px,1fr));">
+        <input id="nome" placeholder="Nome" />
+        <input id="cognome" placeholder="Cognome" />
+        <input id="telefono" placeholder="Telefono" />
+        <input id="email" placeholder="Email" />
+        <input id="indirizzo" placeholder="Indirizzo" />
+        <button id="addBtn" class="secondary">➕ Aggiungi cliente</button>
+      </div>
+
+      <div class="table-container">
+        <div class="status" id="status">Caricamento clienti...</div>
+        <table id="clientiTable">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Cognome</th>
+              <th>Telefono</th>
+              <th>Email</th>
+              <th>Indirizzo</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <a href="Ditta.html" class="back">⬅ Torna a Ditta</a>
+  </div>
+
+  <script>
+    // --- INIZIALIZZA FIREBASE (usa la tua config) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBVt9TgvYLYqAYSADT7JBA7pqeuMzh5d0w",
+      authDomain: "idraulicappweb.firebaseapp.com",
+      projectId: "idraulicappweb",
+      storageBucket: "idraulicappweb.firebasestorage.app",
+      messagingSenderId: "637601444127",
+      appId: "1:637601444127:web:10b6e5e695338b6a47002a"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // UI elements
+    const authUI = document.getElementById('authUI');
+    const userUI = document.getElementById('userUI');
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const loginEmail = document.getElementById('loginEmail');
+    const loginPassword = document.getElementById('loginPassword');
+    const authMsg = document.getElementById('authMsg');
+    const userEmailSpan = document.getElementById('userEmail');
+    const statusSpan = document.getElementById('status');
+
+    const addBtn = document.getElementById('addBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const searchInput = document.getElementById('search');
+    const tableBody = document.querySelector('#clientiTable tbody');
+
+    // Login
+    loginBtn.addEventListener('click', async () => {
+      authMsg.textContent = '';
+      try {
+        await auth.signInWithEmailAndPassword(loginEmail.value, loginPassword.value);
+      } catch (e) {
+        authMsg.textContent = e.message;
+      }
+    });
+
+    // Signup (se vuoi creare un secondo account)
+    signupBtn.addEventListener('click', async () => {
+      authMsg.textContent = '';
+      try {
+        await auth.createUserWithEmailAndPassword(loginEmail.value, loginPassword.value);
+      } catch (e) {
+        authMsg.textContent = e.message;
+      }
+    });
+
+    // Logout
+    logoutBtn.addEventListener('click', () => auth.signOut());
+
+    // Gestione stato auth
+    let unsubscribeSnapshot = null;
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        // mostra UI autenticata
+        authUI.classList.add('hide');
+        userUI.classList.remove('hide');
+        userEmailSpan.textContent = user.email;
+        startListeningClienti();
+      } else {
+        // mostra login
+        authUI.classList.remove('hide');
+        userUI.classList.add('hide');
+        userEmailSpan.textContent = '';
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot(); unsubscribeSnapshot = null;
+        }
+      }
+    });
+
+    // Ascolta la collezione in tempo reale
+    function startListeningClienti() {
+      statusSpan.textContent = 'Caricamento clienti...';
+      unsubscribeSnapshot = db.collection('clienti').orderBy('cognome').onSnapshot(snapshot => {
+        tableBody.innerHTML = '';
+        if (snapshot.empty) {
+          statusSpan.textContent = 'Nessun cliente trovato.';
+        } else {
+          statusSpan.textContent = '';
+        }
+        snapshot.forEach(doc => {
+          const d = doc.data();
+          const tr = document.createElement('tr');
+          tr.dataset.id = doc.id;
+          tr.innerHTML = `
+            <td contenteditable="true" data-field="nome">${escapeHtml(d.nome||'')}</td>
+            <td contenteditable="true" data-field="cognome">${escapeHtml(d.cognome||'')}</td>
+            <td contenteditable="true" data-field="telefono">${escapeHtml(d.telefono||'')}</td>
+            <td contenteditable="true" data-field="email">${escapeHtml(d.email||'')}</td>
+            <td contenteditable="true" data-field="indirizzo">${escapeHtml(d.indirizzo||'')}</td>
+            <td class="actions">
+              <button class="save">💾</button>
+              <button class="delete danger">🗑️</button>
+            </td>
+          `;
+          tableBody.appendChild(tr);
+        });
+
+        // bind actions
+        tableBody.querySelectorAll('.save').forEach(btn => {
+          btn.onclick = async (e) => {
+            const row = e.target.closest('tr');
+            const id = row.dataset.id;
+            const updated = {};
+            row.querySelectorAll('[data-field]').forEach(td => {
+              updated[td.dataset.field] = td.innerText.trim();
+            });
+            try {
+              await db.collection('clienti').doc(id).update(updated);
+              alert('Cliente aggiornato');
+            } catch (err) {
+              alert('Errore aggiornamento: ' + err.message);
+            }
+          };
+        });
+
+        tableBody.querySelectorAll('.delete').forEach(btn => {
+          btn.onclick = async (e) => {
+            const row = e.target.closest('tr');
+            const id = row.dataset.id;
+            if (confirm('Eliminare questo cliente?')) {
+              try {
+                await db.collection('clienti').doc(id).delete();
+              } catch(err) {
+                alert('Errore eliminazione: ' + err.message);
+              }
+            }
+          };
+        });
+
+        applySearchFilter();
+      }, err => {
+        statusSpan.textContent = 'Errore caricamento: ' + err.message;
+      });
+    }
+
+    // Funzione per aggiungere cliente
+    addBtn.addEventListener('click', async () => {
+      const nome = document.getElementById('nome').value.trim();
+      const cognome = document.getElementById('cognome').value.trim();
+      const telefono = document.getElementById('telefono').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const indirizzo = document.getElementById('indirizzo').value.trim();
+
+      if (!nome || !cognome) { alert('Inserisci nome e cognome'); return; }
+
+      try {
+        await db.collection('clienti').add({ nome, cognome, telefono, email, indirizzo, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        // pulisci campi
+        document.getElementById('nome').value = '';
+        document.getElementById('cognome').value = '';
+        document.getElementById('telefono').value = '';
+        document.getElementById('email').value = '';
+        document.getElementById('indirizzo').value = '';
+      } catch (err) {
+        alert('Errore aggiunta: ' + err.message);
+      }
+    });
+
+    // Aggiorna manuale
+    refreshBtn.addEventListener('click', () => {
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot(); unsubscribeSnapshot = null;
+      }
+      startListeningClienti();
+    });
+
+    // Ricerca
+    searchInput.addEventListener('input', applySearchFilter);
+
+    function applySearchFilter() {
+      const q = (searchInput.value || '').toLowerCase();
+      document.querySelectorAll('#clientiTable tbody tr').forEach(tr => {
+        const text = tr.innerText.toLowerCase();
+        tr.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+
+    // semplice escape HTML per sicurezza visualizzazione
+    function escapeHtml(text) {
+      return text.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    }
+  </script>
+</body>
+</html>
