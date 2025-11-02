@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lista Preventivi - IdraulicApp</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f7f9fb;
+    }
+    h1 {
+      text-align: center;
+      color: #005792;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background-color: #005792;
+      color: white;
+    }
+    tr:hover {
+      background-color: #f1f1f1;
+    }
+    button {
+      background-color: #0077c8;
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #005fa3;
+    }
+    .delete-btn {
+      background-color: #d9534f;
+    }
+    .delete-btn:hover {
+      background-color: #c9302c;
+    }
+    .share-menu {
+      display: none;
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+      padding: 8px;
+      z-index: 999;
+    }
+    .share-menu button {
+      display: block;
+      background: none;
+      color: #333;
+      border: none;
+      width: 100%;
+      text-align: left;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .share-menu button:hover {
+      background-color: #f0f0f0;
+    }
+    .share-container {
+      position: relative;
+      display: inline-block;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>📋 Lista Preventivi</h1>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>Tipo</th>
+        <th>Data</th>
+        <th>Prezzo</th>
+        <th colspan="3">Azioni</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody">
+      <tr><td colspan="6">Caricamento in corso...</td></tr>
+    </tbody>
+  </table>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getFirestore, collection, getDocs, doc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    import { getStorage, ref, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
+    import jsPDF from "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.es.min.js";
+
+    // 🔧 CONFIGURAZIONE FIREBASE
+    const firebaseConfig = {
+      apiKey: "AIzaSyBVt9TgvYLYqAYSADT7JBA7pqeuMzh5d0w",
+      authDomain: "idraulicappweb.firebaseapp.com",
+      projectId: "idraulicappweb",
+      storageBucket: "idraulicappweb.appspot.com",
+      messagingSenderId: "637601444127",
+      appId: "INSERISCI-QUI-L'APP-ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    const tableBody = document.getElementById("tableBody");
+    let preventiviData = [];
+
+    // Carica preventivi da Firestore
+    async function caricaPreventivi() {
+      const querySnapshot = await getDocs(collection(db, "preventivi"));
+      preventiviData = [];
+      tableBody.innerHTML = "";
+
+      querySnapshot.forEach((doc) => {
+        const p = doc.data();
+        preventiviData.push({ id: doc.id, ...p });
+      });
+
+      mostraPreventivi(preventiviData);
+    }
+
+    // Mostra tabella
+    function mostraPreventivi(lista) {
+      tableBody.innerHTML = "";
+      if (lista.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="6">Nessun preventivo trovato</td></tr>`;
+        return;
+      }
+
+      lista.forEach((p) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${p.cliente || "-"}</td>
+          <td>${p.tipo || "-"}</td>
+          <td>${p.data ? new Date(p.data).toLocaleDateString("it-IT") : "-"}</td>
+          <td>${p.prezzo || "-"}</td>
+          <td><button onclick="mostraDettaglio('${p.id}')">📄 Apri</button></td>
+          <td>
+            <div class="share-container">
+              <button onclick="toggleShareMenu('${p.id}', event)">📤 Condividi</button>
+              <div class="share-menu" id="share-menu-${p.id}">
+                <button onclick="generaPDF('${p.id}')">⬇️ Esporta PDF</button>
+                <button onclick="inviaEmail('${p.id}')">📧 Invia Email</button>
+                <button onclick="inviaWhatsApp('${p.id}')">
+                  <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/whatsapp.svg" 
+                       alt="WhatsApp" 
+                       style="width:16px;height:16px;vertical-align:middle;margin-right:6px;">
+                  WhatsApp
+                </button>
+                <button onclick="condividiApple('${p.id}')">🍏 Condividi (Apple)</button>
+              </div>
+            </div>
+          </td>
+          <td><button class="delete-btn" onclick="eliminaPreventivo('${p.id}')">🗑️</button></td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
+
+    // 📤 Menu di condivisione
+    window.toggleShareMenu = function(id, event) {
+      event.stopPropagation();
+      document.querySelectorAll(".share-menu").forEach(m => m.style.display = "none");
+      const menu = document.getElementById(`share-menu-${id}`);
+      menu.style.display = menu.style.display === "block" ? "none" : "block";
+    };
+    window.addEventListener("click", () => {
+      document.querySelectorAll(".share-menu").forEach(m => m.style.display = "none");
+    });
+
+    // 📄 Dettaglio preventivo
+    window.mostraDettaglio = async function(id) {
+      const d = await getDoc(doc(db, "preventivi", id));
+      if (!d.exists()) return alert("Preventivo non trovato!");
+      const data = d.data();
+
+      let dettaglio = `
+        <h2>${data.cliente || "Cliente sconosciuto"}</h2>
+        <p><b>Tipo:</b> ${data.tipo}</p>
+        <p><b>Descrizione:</b> ${data.note || "-"}</p>
+        <p><b>Prezzo:</b> €${data.prezzo || "-"}</p>
+        <p><b>Data:</b> ${data.data ? new Date(data.data).toLocaleString("it-IT") : "-"}</p>
+      `;
+      if (data.schizzoURL) {
+        dettaglio += `<p><b>Schizzo:</b><br><img src="${data.schizzoURL}" style="max-width:90%;border:1px solid #ccc;border-radius:8px;margin-top:10px;"></p>`;
+      }
+
+      const popup = window.open("", "_blank");
+      popup.document.write(`
+        <html><head><title>Dettaglio Preventivo</title></head>
+        <body style="font-family:Arial;padding:20px;">
+        ${dettaglio}
+        </body></html>
+      `);
+      popup.document.close();
+    };
+
+    // 🗑️ Elimina
+    window.eliminaPreventivo = async function(id) {
+      if (!confirm("Vuoi davvero eliminare questo preventivo?")) return;
+      const docRef = doc(db, "preventivi", id);
+      await deleteDoc(docRef);
+      alert("✅ Preventivo eliminato!");
+      caricaPreventivi();
+    };
+
+    // ⬇️ Esporta PDF
+    window.generaPDF = async function(id) {
+      const d = await getDoc(doc(db, "preventivi", id));
+      if (!d.exists()) return alert("Preventivo non trovato!");
+      const data = d.data();
+
+      const docPDF = new jsPDF();
+      docPDF.setFontSize(14);
+      docPDF.text("Preventivo IdraulicApp", 10, 15);
+      docPDF.setFontSize(11);
+      docPDF.text(`Cliente: ${data.cliente || "-"}`, 10, 30);
+      docPDF.text(`Tipo: ${data.tipo || "-"}`, 10, 40);
+      docPDF.text(`Prezzo: €${data.prezzo || "-"}`, 10, 50);
+      docPDF.text(`Data: ${data.data ? new Date(data.data).toLocaleDateString("it-IT") : "-"}`, 10, 60);
+      docPDF.text(`Descrizione:`, 10, 75);
+      docPDF.text(`${data.note || "-"}`, 10, 85, { maxWidth: 180 });
+
+      if (data.schizzoURL) {
+        const img = await fetch(data.schizzoURL).then(r => r.blob()).then(b => {
+          return new Promise(res => {
+            const reader = new FileReader();
+            reader.onload = () => res(reader.result);
+            reader.readAsDataURL(b);
+          });
+        });
+        docPDF.addImage(img, "PNG", 10, 110, 100, 100);
+      }
+
+      const fileName = `Preventivo_${data.cliente || id}.pdf`;
+      docPDF.save(fileName);
+    };
+
+    // 📧 Email
+    window.inviaEmail = async function(id) {
+      const d = await getDoc(doc(db, "preventivi", id));
+      if (!d.exists()) return alert("Preventivo non trovato!");
+      const data = d.data();
+
+      const subject = encodeURIComponent(`Preventivo ${data.tipo || ""} - ${data.cliente || ""}`);
+      const body = encodeURIComponent(`Buongiorno ${data.cliente || ""},\n\nin allegato trova il preventivo richiesto.\n\nCordiali saluti,\nElli Idraulico`);
+      window.location.href = `mailto:${data.email || ""}?subject=${subject}&body=${body}`;
+    };
+
+    // 💬 WhatsApp (icona ufficiale)
+    window.inviaWhatsApp = async function(id) {
+      const d = await getDoc(doc(db, "preventivi", id));
+      if (!d.exists()) return alert("Preventivo non trovato!");
+      const data = d.data();
+
+      const text = encodeURIComponent(
+        `Preventivo ${data.tipo || ""}\nCliente: ${data.cliente || ""}\nPrezzo: €${data.prezzo || "-"}\n\nDescrizione: ${data.note || "-"}`
+      );
+      const numero = data.telefono ? data.telefono.replace(/\D/g, "") : "";
+      const url = numero
+        ? `https://wa.me/${numero}?text=${text}`
+        : `https://wa.me/?text=${text}`;
+
+      window.open(url, "_blank");
+    };
+
+    // 🍏 Condivisione nativa (Apple)
+    window.condividiApple = async function(id) {
+      const d = await getDoc(doc(db, "preventivi", id));
+      if (!d.exists()) return alert("Preventivo non trovato!");
+      const data = d.data();
+
+      const pdf = new jsPDF();
+      pdf.setFontSize(14);
+      pdf.text("Preventivo IdraulicApp", 10, 15);
+      pdf.setFontSize(11);
+      pdf.text(`Cliente: ${data.cliente || "-"}`, 10, 30);
+      pdf.text(`Tipo: ${data.tipo || "-"}`, 10, 40);
+      pdf.text(`Prezzo: €${data.prezzo || "-"}`, 10, 50);
+      pdf.text(`Data: ${data.data ? new Date(data.data).toLocaleDateString("it-IT") : "-"}`, 10, 60);
+      pdf.text(`Descrizione:`, 10, 75);
+      pdf.text(`${data.note || "-"}`, 10, 85, { maxWidth: 180 });
+
+      const blob = pdf.output("blob");
+      const file = new File([blob], `Preventivo_${data.cliente || id}.pdf`, { type: "application/pdf" });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: `Preventivo ${data.tipo || ""}`,
+            text: `Preventivo per ${data.cliente || ""} - €${data.prezzo || "-"}`,
+            files: [file],
+          });
+        } catch (err) {
+          console.warn("Condivisione annullata o non riuscita:", err);
+        }
+      } else {
+        alert("La condivisione nativa non è supportata su questo dispositivo.");
+      }
+    };
+
+    caricaPreventivi();
+  </script>
+</body>
+</html>
